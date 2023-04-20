@@ -25,16 +25,14 @@ async fn download_tile(
 
     let response = get(&url).await?.bytes().await?;
 
-    let dir = format!("tiles/{}/{}", z, x);
-    fs::create_dir_all(&dir).expect("Failed to create directory");
-    let file = format!("{}/{}.png", dir, y);
+    let file = format!("tiles/{z}/{x}/{y}.png");
 
     let mut output_file = fs::File::create(file).expect("Failed to create file");
     output_file
         .write_all(&response)
         .expect("Failed to write image");
 
-    println!("Downloaded tile {}/{}/{}", z, x, y);
+    println!("Downloaded tile {z}/{x}/{y}");
     Ok(())
 }
 
@@ -75,6 +73,10 @@ async fn main() {
         let mut handles = vec![];
 
         for x in min_x..=max_x {
+            // Create the directory before spawning the tasks for the current x-coordinate
+            let dir = format!("tiles/{zoom}/{x}");
+            fs::create_dir_all(&dir).expect("Failed to create directory");
+
             for y in min_y..=max_y {
                 let api_key = Arc::clone(&api_key);
                 let base_url = Arc::clone(&base_url);
@@ -82,7 +84,7 @@ async fn main() {
                 let handle = task::spawn(async move {
                     let _permit = semaphore.acquire().await;
                     if let Err(e) = download_tile(zoom, x, y, &base_url, &api_key).await {
-                        eprintln!("Error downloading tile {}/{}/{}: {}", zoom, x, y, e);
+                        eprintln!("Error downloading tile {zoom}/{x}/{y}: {e}");
                     }
                 });
 
@@ -96,7 +98,7 @@ async fn main() {
         // Print any errors that occurred
         for (idx, result) in results.into_iter().enumerate() {
             if let Err(e) = result {
-                eprintln!("Error downloading tile {}: {}", idx, e);
+                eprintln!("Error downloading tile {idx}: {e}");
             }
         }
     }
