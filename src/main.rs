@@ -7,10 +7,9 @@ use tokio::{sync::Semaphore, task};
 
 fn deg2num(lat_deg: f64, lon_deg: f64, zoom: u32) -> (u32, u32) {
     let lat_rad = lat_deg.to_radians();
-    let n = 2u32.pow(zoom);
-    let xtile = ((lon_deg + 180.0) / 360.0 * n as f64).floor() as u32;
-    let ytile =
-        ((1.0 - (lat_rad.tan() + (1.0 / lat_rad.cos())).atanh()) / 2.0 * n as f64).floor() as u32;
+    let n = 2f64.powi(zoom as _);
+    let xtile = ((lon_deg + 180.0) / 360.0 * n).floor() as u32;
+    let ytile = ((1.0 - lat_rad.tan().asinh() / std::f64::consts::PI) / 2.0 * n).floor() as _;
     (xtile, ytile)
 }
 
@@ -22,10 +21,9 @@ async fn download_tile(
     api_key: &str,
 ) -> Result<(), reqwest::Error> {
     let url = format!("{base_url}/{z}/{x}/{y}.png?apikey={api_key}");
+    let file = format!("tiles/{z}/{x}/{y}.png");
 
     let response = get(&url).await?.bytes().await?;
-
-    let file = format!("tiles/{z}/{x}/{y}.png");
 
     let mut output_file = fs::File::create(file).expect("Failed to create file");
     output_file
@@ -76,6 +74,8 @@ async fn main() {
             // Create the directory before spawning the tasks for the current x-coordinate
             let dir = format!("tiles/{zoom}/{x}");
             fs::create_dir_all(&dir).expect("Failed to create directory");
+
+            let (min_y, max_y) = (min_y.min(max_y), min_y.max(max_y));
 
             for y in min_y..=max_y {
                 let api_key = Arc::clone(&api_key);
