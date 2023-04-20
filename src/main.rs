@@ -1,6 +1,7 @@
 use std::{fs, io::Write, sync::Arc};
 
 use clap::Parser;
+use futures_util::future::join_all;
 use reqwest::get;
 use tokio::{sync::Semaphore, task};
 
@@ -89,8 +90,14 @@ async fn main() {
             }
         }
 
-        for handle in handles {
-            handle.await.expect("Task panicked");
+        // Join all handles, so they run concurrently
+        let results = join_all(handles).await;
+
+        // Print any errors that occurred
+        for (idx, result) in results.into_iter().enumerate() {
+            if let Err(e) = result {
+                eprintln!("Error downloading tile {}: {}", idx, e);
+            }
         }
     }
 
